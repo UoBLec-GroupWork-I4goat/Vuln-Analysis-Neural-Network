@@ -1,70 +1,111 @@
-
 import os
-import shutil
-import numpy
-import scipy.special
-import pandas as pd
-
-from sklearn.model_selection import train_test_split
-from sklearn.utils import resample
-from scipy import stats
-
-import pandas as pd
-import numpy as np
-import imblearn
-from imblearn.over_sampling import SMOTE
-import matplotlib.pyplot as plt
-import seaborn as sns
 import csv
 import json
-import itertools
-from itertools import combinations
-# import matplotlib.pyplot as plt
-import plotext as plt
-
+import shutil
+import numpy as np
+import pandas as pd
+import scipy.special
+import imblearn.over_sampling
 from os import listdir
 from os.path import isfile, join
-from multiprocessing import Process
+from itertools import combinations
+from sklearn.utils import resample
+from sklearn.model_selection import train_test_split
 
 
-def processInstance(epochs,input_nodes,hidden_nodes,output_nodes,learning_rate):    
-    
-    attrs = ["A", "B", "C", "D"] #selected combination of input attributes ... n  
-    # ...extend or delete depending on the attributes you choose to evaluate
-    
-    balancingTypes = ['SMOTE','RANDOMOVERSAMPLING', 'RANDOMUNDERSAMPLING']
+# def processInstance(epochs, input_nodes, hidden_nodes, output_nodes, learning_rate):
+#
+#     attrs = ["A", "B", "C", "D"] #selected combination of input attributes ... n
+#     # ...extend or delete depending on the attributes you choose to evaluate
+#
+#     balancingTypes = ['SMOTE','RANDOMOVERSAMPLING', 'RANDOMUNDERSAMPLING']
+#
+#     for b in range(1,len(balancingTypes)):
+#         balancingType = balancingTypes[b]
+#
+#         for r in range(1,len(attrs)):
+#             attcombinations = list(combinations(attrs, r))
+#
+#             for i in range(len(attcombinations)):
+#                 input_nodes = len(attcombinations[0])
+#                 attcombination = attcombinations[i]
+#
+#                 configuration = {
+#                     "InputNodes":input_nodes,
+#                     "HiddenNodes":hidden_nodes,
+#                     "OutputNodes":output_nodes,
+#                     "epochs":epochs,
+#                     "LearningRate":learning_rate,
+#                     "BalancingType":balancingType,
+#                     "attcombination":attcombination
+#                 }
+#
+#                 configurationExist = Utilities.configexist(configuration)
+#                 if (configurationExist == None):
+#                     annf = NeuralNetworkFactory(configuration)
+#                     configuration['performance'] = annf.execute(configuration)
+#                     Utilities.writeConfigPerformance(configuration)
+#                     # Utilities.prettyprintconfig(configuration,True)
+#                 else:
+#                     configuration = configurationExist
+#                     # Utilities.prettyprintconfig(configuration,False)
+#     pass
 
-    for b in range(1,len(balancingTypes)):
+def processInstance(epochs, input_nodes, hidden_nodes, output_nodes, learning_rate):
+    attrs = ["A", "B", "C", "D"]  # Selected combination of input attributes
+    balancingTypes = ['SMOTE', 'RANDOMOVERSAMPLING', 'RANDOMUNDERSAMPLING']
+
+    for b in range(len(balancingTypes)):  # 从0开始遍历所有平衡方法
         balancingType = balancingTypes[b]
 
-        for r in range(1,len(attrs)):
+        for r in range(1, len(attrs)):  # 从1开始，因为我们希望至少选择一个属性
             attcombinations = list(combinations(attrs, r))
 
             for i in range(len(attcombinations)):
-                input_nodes = len(attcombinations[0])
+                input_nodes = len(attcombinations[i])  # 确保正确获取当前组合的输入节点数
                 attcombination = attcombinations[i]
 
                 configuration = {
-                    "InputNodes":input_nodes,
-                    "HiddenNodes":hidden_nodes,
-                    "OutputNodes":output_nodes,
-                    "epochs":epochs,
-                    "LearningRate":learning_rate,
-                    "BalancingType":balancingType,
-                    "attcombination":attcombination
+                    "InputNodes": input_nodes,
+                    "HiddenNodes": hidden_nodes,
+                    "OutputNodes": output_nodes,
+                    "epochs": epochs,
+                    "LearningRate": learning_rate,
+                    "BalancingType": balancingType,
+                    "attcombination": attcombination
                 }
 
                 configurationExist = Utilities.configexist(configuration)
-                if (configurationExist == None):
+                if configurationExist is None:
                     annf = NeuralNetworkFactory(configuration)
-                    configuration['performance'] = annf.execute(configuration)
-                    Utilities.writeConfigPerformance(configuration)
-                    # Utilities.prettyprintconfig(configuration,True)
+                    performance = annf.execute(configuration)
+                    if performance:
+                        configuration['performance'] = performance
+                        Utilities.writeConfigPerformance(configuration)
+                        # 在这里将结果写入 CSV 文件
+                        write_result_to_csv(configuration, performance)
                 else:
-                    configuration = configurationExist
-                    # Utilities.prettyprintconfig(configuration,False)
-    pass
+                    print("Configuration already exists. Skipping...")
 
+# 写入结果到 CSV 文件的函数
+def write_result_to_csv(configuration, performance):
+    results_file = f"data/_results{configuration['epochs']}/results.csv"
+    with open(results_file, 'a', newline='') as f:
+        csv_writer = csv.writer(f)
+        row = [
+            configuration["InputNodes"], configuration["LearningRate"], configuration["HiddenNodes"],
+            configuration["OutputNodes"], configuration["epochs"],
+            "N/A",  # PreBalance:ClassDistributionRatio 可以根据需要填写
+            configuration["BalancingType"],
+            "N/A",  # PostBalance:ClassDistributionRatio 可以根据需要填写
+            "N/A",  # truepositiverate
+            "N/A",  # falsepositiverate
+            "N/A",  # precision
+            "N/A",  # recall
+            performance.get("accuracy", "N/A"),
+            "N/A"  # f1score
+        ]
+        csv_writer.writerow(row)
 
 class NeuralNetworkFactory:
 
@@ -272,7 +313,7 @@ class NeuralNetworkFactory:
                 f1score = 2 *((precision*recall)/(precision +recall))
 
             # calculate the performance score, the fraction of correct answers
-            scorecard_array = numpy.asarray(scorecard)
+            scorecard_array = np.asarray(scorecard)
             accuracy = scorecard_array.sum() / scorecard_array.size
 
             rate = str(round((rowcount/len(self.testingDataList))*100,2))+"%"
@@ -284,7 +325,7 @@ class NeuralNetworkFactory:
 
         pass
 
-        scorecard_array = numpy.asarray(scorecard)
+        scorecard_array = np.asarray(scorecard)
         accuracy = scorecard_array.sum() / scorecard_array.size
 
         performance ={
@@ -308,10 +349,9 @@ class NeuralNetworkFactory:
         performance['scorecard']= scorecard
         return performance
 
-# 
 
 class DataProcessor:
-    def __init__(self,epoch, configuration_, _balancing_type,attcombination):
+    def __init__(self,epoch, configuration_, _balancing_type, attcombination):
         util = Utilities()
 
         # mergeTrainingfiles = []
@@ -328,7 +368,6 @@ class DataProcessor:
         #load training data for aws
         util.removeHeader(self.balanced_data_file,self.headless_file)
         util.splitTrainTestData(self.headless_file,self.training_data_file,self.testing_data_file)
-        
 
     def getTrainingData(self):
         training_data_ = open(self.training_data_file, 'r')
@@ -353,15 +392,12 @@ class DataProcessor:
 
         return testing_data_list
 
-
-
-# 
     
 #Neural network class definition
 class NeuralNetwork:
 
-    #initialise the neural network
-    def __init__(self, inputnodes, hiddennodes, outputnodes,learningrate):
+    # initialise the neural network
+    def __init__(self, inputnodes, hiddennodes, outputnodes, learningrate):
         #set the number of nodes in each input, hidden, output layer
         self.inodes = inputnodes
         self.hnodes = hiddennodes
@@ -371,8 +407,8 @@ class NeuralNetwork:
         # Weights inside the arrays are w_i_j, where link is from node i to node j in the next layer
         # w11 w21
         # w12 w22 etc
-        self.wih = numpy.random.normal(0.0, pow(self.hnodes, -0.5), (self.hnodes, self.inodes))
-        self.who = numpy.random.normal(0.0, pow(self.onodes, -0.5), (self.onodes, self.hnodes))
+        self.wih = np.random.normal(0.0, pow(self.hnodes, -0.5), (self.hnodes, self.inodes))
+        self.who = np.random.normal(0.0, pow(self.onodes, -0.5), (self.onodes, self.hnodes))
 
         #learning rate
         self.lr = learningrate
@@ -385,45 +421,45 @@ class NeuralNetwork:
     # train the neural network
     def train(self, inputs_list, targets_list):
         # convert inputs list to 2d array
-        inputs = numpy.array(inputs_list, ndmin=2).T
-        targets = numpy.array(targets_list, ndmin=2).T
+        inputs = np.array(inputs_list, ndmin=2).T
+        targets = np.array(targets_list, ndmin=2).T
         
         # calculate signals into hidden layer
-        hidden_inputs = numpy.dot(self.wih, inputs)
+        hidden_inputs = np.dot(self.wih, inputs)
         # calculate the signals emerging from hidden layer
         hidden_outputs = self.activation_function(hidden_inputs)
         
         # calculate signals into final output layer
-        final_inputs = numpy.dot(self.who, hidden_outputs)
+        final_inputs = np.dot(self.who, hidden_outputs)
         # calculate the signals emerging from final output layer
         final_outputs = self.activation_function(final_inputs)
         
         # output layer error is the (target - actual)
         output_errors = targets - final_outputs
         # hidden layer error is the output_errors, split by weights, recombined at hidden nodes
-        hidden_errors = numpy.dot(self.who.T, output_errors) 
+        hidden_errors = np.dot(self.who.T, output_errors)
         
         # update the weights for the links between the hidden and output layers
-        self.who += self.lr * numpy.dot((output_errors * final_outputs * (1.0 - final_outputs)), numpy.transpose(hidden_outputs))
+        self.who += self.lr * np.dot((output_errors * final_outputs * (1.0 - final_outputs)), np.transpose(hidden_outputs))
         
         # update the weights for the links between the input and hidden layers
-        self.wih += self.lr * numpy.dot((hidden_errors * hidden_outputs * (1.0 - hidden_outputs)), numpy.transpose(inputs))
+        self.wih += self.lr * np.dot((hidden_errors * hidden_outputs * (1.0 - hidden_outputs)), np.transpose(inputs))
         
         pass
 
 
- # query the neural network
+    # query the neural network
     def query(self, inputs_list):
         # convert inputs list to 2d array
-        inputs = numpy.array(inputs_list, ndmin=2).T
+        inputs = np.array(inputs_list, ndmin=2).T
         
         # calculate signals into hidden layer
-        hidden_inputs = numpy.dot(self.wih, inputs)
+        hidden_inputs = np.dot(self.wih, inputs)
         # calculate the signals emerging from hidden layer
         hidden_outputs = self.activation_function(hidden_inputs)
         
         # calculate signals into final output layer
-        final_inputs = numpy.dot(self.who, hidden_outputs)
+        final_inputs = np.dot(self.who, hidden_outputs)
         # calculate the signals emerging from final output layer
         final_outputs = self.activation_function(final_inputs)
         
@@ -527,7 +563,7 @@ class Utilities:
             X = data_self_attended.drop('Vulnerability_Truth', axis =1)
             y = data_self_attended['Vulnerability_Truth']
 
-            smote = SMOTE(random_state=42)
+            smote = imblearn.over_sampling.SMOTE(random_state=42)
             X_resampled, y_resampled = smote.fit_resample(X, y)
 
             y_resampled_ = np.reshape(y_resampled,(-1, y_resampled.size)).transpose()
@@ -681,7 +717,6 @@ class Utilities:
             df.to_csv(f2_balanced, index=False, header=False)
 
         return data_balanced
-    
 
     def createDirs(self, directory):
         shutil.rmtree(directory, ignore_errors=True)
@@ -705,10 +740,9 @@ class Utilities:
         with open(f2, "w") as f:
             f.write("\n".join(data))
 
-
     def splitTrainTestData(self,all_file,train_file,test_file):
         df = pd.read_csv(all_file)
-        indices = numpy.arange(len(df))
+        indices = np.arange(len(df))
         indices_train, indices_test = train_test_split(indices, test_size=0.2)
         df_train = df.iloc[indices_train]
         df_test = df.iloc[indices_test]

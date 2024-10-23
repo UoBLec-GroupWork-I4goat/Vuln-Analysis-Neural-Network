@@ -1,2 +1,10 @@
 test.py
 data/
+
+archive/
+
+.idea/
+.vscode/
+.ipynb_checkpoints/
+
+draft.txt
